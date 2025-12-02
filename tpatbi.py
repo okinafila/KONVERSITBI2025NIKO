@@ -89,7 +89,7 @@ st.set_page_config(page_title="Aplikasi Perhitungan dan Simpan PDF + Rekam", lay
 
 # Sidebar: attempt connect once and show status
 with st.sidebar:
-    st.header("Cek Koneksi")
+    st.header("Status :")
     if not GS_AVAILABLE:
         st.warning("gspread/oauth2client belum terpasang. Tambahkan ke requirements.txt")
         st.stop()
@@ -350,6 +350,7 @@ def add_bg_from_url():
      )
 
 add_bg_from_url()
+
 
 
 
