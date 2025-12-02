@@ -193,7 +193,7 @@ if (selected == 'Hitung Nilai TPA') :
         if ws:
             ok, err = append_row_safe(ws, record)
             if ok:
-                st.success("Hasil tersimpan ke Google Sheets.")
+                st.success("Hasil tersimpan.")
             else:
                 st.error(f"Gagal menyimpan ke Google Sheets: {err}")
         else:
@@ -328,7 +328,7 @@ if (selected == "Hitung Nilai TBI") :
         if ws:
             ok, err = append_row_safe(ws, record)
             if ok:
-                st.success("Hasil tersimpan ke Google Sheets.")
+                st.success("Hasil tersimpan.")
             else:
                 st.error(f"Gagal menyimpan ke Google Sheets: {err}")
         else:
@@ -350,5 +350,6 @@ def add_bg_from_url():
      )
 
 add_bg_from_url()
+
 
 
