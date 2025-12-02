@@ -1,3 +1,5 @@
+gspread
+oauth2client
 streamlit
 streamlit_option_menu
 fpdf==1.7.2
