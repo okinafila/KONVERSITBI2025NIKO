@@ -95,7 +95,7 @@ with st.sidebar:
         st.stop()
     ws, err = connect_gsheets_from_secrets()
     if ws:
-        st.success("Test: connected")
+        st.success("Ready")
     else:
         st.error(f"GSheets not connected: {err}")
     st.markdown("---")
@@ -350,6 +350,7 @@ def add_bg_from_url():
      )
 
 add_bg_from_url()
+
 
 
 
