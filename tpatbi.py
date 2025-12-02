@@ -89,17 +89,17 @@ st.set_page_config(page_title="Aplikasi Perhitungan dan Simpan PDF + Rekam", lay
 
 # Sidebar: attempt connect once and show status
 with st.sidebar:
-    st.header("Koneksi Google Sheets")
+    st.header("Cek Koneksi")
     if not GS_AVAILABLE:
         st.warning("gspread/oauth2client belum terpasang. Tambahkan ke requirements.txt")
         st.stop()
     ws, err = connect_gsheets_from_secrets()
     if ws:
-        st.success("Google Sheets: connected")
+        st.success("Test: connected")
     else:
         st.error(f"GSheets not connected: {err}")
     st.markdown("---")
-    st.info("Pastikan spreadsheet sudah dishare ke service account (email di JSON) dengan role Editor.")
+    st.info("Pastikan data Nama diisi dengan benar.")
 
 # navigasi sidebar
 with st.sidebar:
@@ -350,4 +350,5 @@ def add_bg_from_url():
      )
 
 add_bg_from_url()
+
 
