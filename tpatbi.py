@@ -26,21 +26,38 @@ class PDF(FPDF):
 def connect_gsheets_from_secrets():
     """
     Connect to Google Sheets using st.secrets['gspread'].
-    Expects:
-      st.secrets['gspread']['service_account_json'] -> stringified JSON
-      st.secrets['gspread']['sheet_key'] -> sheet id
-    Returns worksheet object or (None, error_message)
+    Supports either:
+      - st.secrets['gspread']['service_account_json'] (string JSON), OR
+      - st.secrets['gspread']['service_account_b64'] (base64 of JSON)
+    Expects st.secrets['gspread']['sheet_key'] set.
+    Returns (ws, error) where ws is worksheet or None.
     """
     if not GS_AVAILABLE:
-        return None, "gspread/oauth2client tidak terinstal"
+        return None, "gspread/oauth2client tidak terpasang"
     if "gspread" not in st.secrets:
         return None, "st.secrets['gspread'] tidak ditemukan"
-    try:
-        # Load JSON from secrets (the JSON must be a valid JSON string)
-        creds_json = json.loads(st.secrets["gspread"]["service_account_json"])
-    except Exception as e:
-        return None, f"Invalid service_account_json: {e}"
 
+    # get JSON from either secrets key
+    creds_json = None
+    # 1) try direct JSON
+    if "service_account_json" in st.secrets["gspread"]:
+        try:
+            creds_json = json.loads(st.secrets["gspread"]["service_account_json"])
+        except Exception as e:
+            return None, f"Invalid service_account_json: {e}"
+
+    # 2) try base64
+    elif "service_account_b64" in st.secrets["gspread"]:
+        try:
+            import base64
+            raw = base64.b64decode(st.secrets["gspread"]["service_account_b64"]).decode("utf-8")
+            creds_json = json.loads(raw)
+        except Exception as e:
+            return None, f"Invalid service_account_b64: {e}"
+    else:
+        return None, "Tidak menemukan service_account_json atau service_account_b64 di st.secrets"
+
+    # authorize
     try:
         scope = ["https://www.googleapis.com/auth/spreadsheets",
                  "https://www.googleapis.com/auth/drive"]
@@ -333,3 +350,4 @@ def add_bg_from_url():
      )
 
 add_bg_from_url()
+
