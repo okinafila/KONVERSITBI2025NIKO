@@ -19,6 +19,7 @@ try:
 except Exception:
     requests = None
 
+# try to use client-side JS (streamlit_javascript) for reliable userAgent/ip
 try:
     from streamlit_javascript import st_javascript
     SJ_AVAILABLE = True
@@ -36,14 +37,6 @@ class PDF(FPDF):
 # Google Sheets helpers
 # -------------------------
 def connect_gsheets_from_secrets():
-    """
-    Connect to Google Sheets using st.secrets['gspread'].
-    Supports either:
-      - st.secrets['gspread']['service_account_json'] (string JSON), OR
-      - st.secrets['gpread']['service_account_b64'] (base64 of JSON)
-    Expects st.secrets['gspread']['sheet_key'] set.
-    Returns (ws, error) where ws is worksheet or None.
-    """
     if not GS_AVAILABLE:
         return None, "gspread/oauth2client tidak terpasang"
     if "gspread" not in st.secrets:
@@ -89,7 +82,7 @@ def append_row_safe(ws, row):
         return False, str(e)
 
 # -------------------------
-# Minimal metadata helpers (unchanged)
+# Metadata & conversion helpers
 # -------------------------
 def get_session_id():
     if "sid" not in st.session_state:
@@ -97,6 +90,9 @@ def get_session_id():
     return st.session_state.sid
 
 def get_user_agent():
+    """
+    Try client-side JS first (st_javascript). If not available, return 'unknown'.
+    """
     if SJ_AVAILABLE:
         try:
             ua = st_javascript("navigator.userAgent")
@@ -106,21 +102,42 @@ def get_user_agent():
     return "unknown"
 
 def get_public_ip():
-    if requests is None:
-        return "unknown"
-    try:
-        r = requests.get("https://api.ipify.org?format=json", timeout=3)
-        return r.json().get("ip", "unknown")
-    except Exception:
-        return "unknown"
+    """
+    Attempt client-side fetch using st_javascript for most reliability on Streamlit Cloud.
+    Fallback: use requests (server-side). If both unavailable, return 'unknown'.
+    """
+    # 1) try st_javascript client-side fetch (returns string ip)
+    if SJ_AVAILABLE:
+        try:
+            # This JS returns the IP string or null
+            js_code = """
+            (async ()=>{
+              try {
+                const r = await fetch('https://api.ipify.org?format=json');
+                const j = await r.json();
+                return j.ip;
+              } catch(e) {
+                return null;
+              }
+            })();
+            """
+            ip = st_javascript(js_code)
+            if ip:
+                return ip
+        except Exception:
+            pass
 
-# -------------------------
-# TOEFL -> IELTS converter (0.5 bands)
-# -------------------------
+    # 2) fallback to requests (server-side)
+    if requests is not None:
+        try:
+            r = requests.get("https://api.ipify.org?format=json", timeout=3)
+            return r.json().get("ip", "unknown")
+        except Exception:
+            pass
+
+    return "unknown"
+
 def toefl_to_ielts(score):
-    """
-    Convert TOEFL-like score (310-677) to IELTS band using 0.5 increments mapping.
-    """
     mapping = [
         (660, 9.0),
         (640, 8.5),
@@ -146,11 +163,11 @@ def toefl_to_ielts(score):
     return 0.0
 
 # -------------------------
-# UI & App (TPA kept as before; TBI updated to include IELTS metadata)
+# UI & App
 # -------------------------
 st.set_page_config(page_title="Aplikasi Konversi Skor TBI", layout="centered")
 
-# Sidebar: attempt connect once and show status
+# Sidebar: connection status
 with st.sidebar:
     st.header("Status :")
     if not GS_AVAILABLE:
@@ -164,7 +181,7 @@ with st.sidebar:
     st.markdown("---")
     st.info("Pastikan data Nama diisi dengan benar.")
 
-# navigasi sidebar
+# navigation
 with st.sidebar:
     selected = option_menu('Hitung Nilai Hasil CAT',
                            ['Hitung Nilai TPA', 'Hitung Nilai TBI'],
@@ -242,7 +259,7 @@ if (selected == 'Hitung Nilai TPA') :
             mime="application/pdf"
         )
 
-        # --- TPA recording left as-is (no IELTS injection) ---
+        # TPA record kept as before
         record = [
             current_date,
             "TPA",
@@ -263,7 +280,7 @@ if (selected == 'Hitung Nilai TPA') :
             st.info("Tidak tersambung ke Google Sheets — hasil hanya diunduh PDF.")
 
 
-# ---------- TBI (UPDATED: add IELTS conversion & metadata here) ----------
+# ---------- TBI (UPDATED: persist output & better IP fetch) ----------
 if (selected == "Hitung Nilai TBI") :
     st.title('Hitung Nilai TBI')
 
@@ -309,127 +326,105 @@ if (selected == "Hitung Nilai TBI") :
     nilai_input1 = st.text_input ("Masukkan Nilai Structure", "0")
     nilai_input2 = st.text_input ("Masukkan Nilai Reading", "0")
 
-    Hitung = st.button('Hitung Nilai TBI')
+    # We use a form to reduce rerun flicker — results persist in session_state
+    with st.form(key="form_tbi"):
+        submitted = st.form_submit_button("Hitung Nilai TBI")
 
-    if Hitung:
-        try:
-            n1 = float(nilai_input)
-            n2 = float(nilai_input1)
-            n3 = float(nilai_input2)
-        except Exception:
-            st.error("Pastikan semua input numeric (angka).")
-            st.stop()
+        if submitted:
+            # convert inputs
+            try:
+                n1 = float(nilai_input)
+                n2 = float(nilai_input1)
+                n3 = float(nilai_input2)
+            except Exception:
+                st.error("Pastikan semua input numeric (angka).")
+                st.stop()
 
-        try:
-            nk1 = konversi_nilai('Listening', n1)
-            nk2 = konversi_nilai('Structure', n2)
-            nk3 = konversi_nilai('Reading', n3)
-        except KeyError:
-            st.error("Nilai tidak valid untuk konversi. Pastikan memasukkan nilai yang sesuai pilihan (mis. 0,2,4,... atau 2.5 langkah untuk Structure).")
-            st.stop()
+            try:
+                nk1 = konversi_nilai('Listening', n1)
+                nk2 = konversi_nilai('Structure', n2)
+                nk3 = konversi_nilai('Reading', n3)
+            except KeyError:
+                st.error("Nilai tidak valid untuk konversi. Pastikan memasukkan nilai yang sesuai pilihan.")
+                st.stop()
 
-        nilai_akhir = (nk1 + nk2 + nk3) / 3 * 10
-        st.markdown(f'<p style="font-size: 24px;">Nilai TBI Anda Adalah= {round(nilai_akhir, 2)}</p>', unsafe_allow_html=True)
+            nilai_akhir = (nk1 + nk2 + nk3) / 3 * 10
 
-        # --- NEW: convert TOEFL-like result -> IELTS, show it, and record metadata ---
-        nilai_ielts_est = toefl_to_ielts(round(nilai_akhir))
-        st.markdown(f'Perkiraan IELTS (dari hasil TBI): **{nilai_ielts_est}**')
-
-        # determine kategori (CEFR)
-        def cefr_level_tbi(skor):
-            if 627 <= skor <= 677:
-                return "C1 : Effective Operational Proficiency / Advanced (Proficient User)"
-            elif 543 <= skor <= 626:
-                return "B2 : Vantage / Upper Intermediate (Independent User)"
-            elif 460 <= skor <= 542:
-                return "B1 : Threshold/Intermediate (Independent User)"
-            elif 310 <= skor <= 459:
-                return "A2: Waystage / Elementary (Basic User)"
+            # calculate ielts and metadata AFTER we have toefl-like score
+            nilai_ielts_est = toefl_to_ielts(round(nilai_akhir))
+            kategori_cefr = None
+            # determine kategori (CEFR)
+            if 627 <= round(nilai_akhir) <= 677:
+                kategori_cefr = "C1 : Effective Operational Proficiency / Advanced (Proficient User)"
+            elif 543 <= round(nilai_akhir) <= 626:
+                kategori_cefr = "B2 : Vantage / Upper Intermediate (Independent User)"
+            elif 460 <= round(nilai_akhir) <= 542:
+                kategori_cefr = "B1 : Threshold/Intermediate (Independent User)"
+            elif 310 <= round(nilai_akhir) <= 459:
+                kategori_cefr = "A2: Waystage / Elementary (Basic User)"
             else:
-                return "Skor tidak termasuk dalam kategori yang diberikan"
+                kategori_cefr = "Skor tidak termasuk dalam kategori yang diberikan"
 
-        kategori_cefr = cefr_level_tbi(round(nilai_akhir))
+            # metadata
+            sid = get_session_id()
+            user_agent = get_user_agent()
+            ip = get_public_ip()
+            timestamp = datetime.datetime.utcnow().isoformat()
 
-        # PDF
-        pdf = PDF()
-        pdf.add_page()
-        pdf.set_font("Courier", size=12)
-        try:
-            pdf.image("logopusbinjf.png", x=10, y=8, w=25)
-        except Exception:
-            pass
-        pdf.cell(200, 10, f" ", ln=True, align="C")
-        pdf.cell(50, 10, "Nama: ")
-        pdf.cell(50, 10, str(nama))
-        pdf.cell(200, 10, f" ", ln=True)
-        pdf.set_font("Courier", "B", 12)
-        pdf.cell(50, 10, "Subtest", 1, 0, "C")
-        pdf.cell(50, 10, "Nilai Konversi", 1, 0, "C")
-        pdf.ln()
-        pdf.set_font("Courier", size=12)
-        pdf.cell(50, 10, "Listening", 1)
-        pdf.cell(50, 10, str(nk1), 1, 0, "C")
-        pdf.ln()
-        pdf.cell(50, 10, "Structure", 1)
-        pdf.cell(50, 10, str(nk2), 1, 0, "C")
-        pdf.ln()
-        pdf.cell(50, 10, "Reading", 1)
-        pdf.cell(50, 10, str(nk3), 1, 0, "C")
-        pdf.ln()
-        pdf.cell(50, 10, "Skor TBI", 1)
-        pdf.cell(50, 10, f"{round(nilai_akhir, 2)}", 1, 0, "C")
-        pdf.ln()
-        pdf.cell(30, 10, "Kategori :", 0)
-        pdf.cell(150, 10, str(kategori_cefr), 0)
-        pdf.ln()
-        pdf.set_font("Courier", size=11)
-        pdf.cell(20, 5, "Note : hasil tes ini bersifat try out, tidak dapat digunakan untuk mengikuti", 0)
-        pdf.ln()
-        pdf.cell(20, 5, "       seleksi beasiswa apapun", 0)
-        pdf.ln()
-        pdf.set_font("Courier", size=12)
-        pdf.cell(200, 50, "Best Regards,", ln=True, align="C")
-        pdf.cell(200, 10, "Pusbin JFPM", ln=True, align="C")
-        pdf.set_y(0)
-        pdf.cell(0, 10, f"Dicetak: {current_date}", 0, 0, "R")
-        pdf_output = pdf.output(dest="S").encode("latin1")
+            # save results into session_state so UI keeps it after rerun
+            st.session_state["last_tbi_result"] = {
+                "timestamp": timestamp,
+                "nama": nama,
+                "nk1": nk1,
+                "nk2": nk2,
+                "nk3": nk3,
+                "nilai_akhir": round(nilai_akhir, 2),
+                "nilai_ielts_est": nilai_ielts_est,
+                "kategori_cefr": kategori_cefr,
+                "sid": sid,
+                "user_agent": user_agent,
+                "ip": ip,
+                "uuid": str(uuid.uuid4())
+            }
 
-        st.download_button(
-            label="Download Hasil Perhitungan TBI (PDF)",
-            data=pdf_output,
-            file_name="hasil_perhitungan_tbi.pdf",
-            mime="application/pdf"
-        )
-
-        # Rekam ke Google Sheets (TBI) -- now includes IELTS and metadata
-        sid = get_session_id()
-        user_agent = get_user_agent()
-        ip = get_public_ip()
-        timestamp = datetime.datetime.utcnow().isoformat()
-
-        record = [
-            timestamp,
-            "TBI",
-            nama,
-            nk1,
-            nk2,
-            nk3,
-            round(nilai_akhir, 2),
-            nilai_ielts_est,   # <-- new: IELTS estimate based on TOEFL-like score
-            kategori_cefr,
-            sid,
-            user_agent,
-            ip,
-            str(uuid.uuid4())
-        ]
-        if ws:
-            ok, err = append_row_safe(ws, record)
-            if ok:
-                st.success("Hasil tersimpan.")
+            # append to sheet (with metadata)
+            record = [
+                timestamp,
+                "TBI",
+                nama,
+                nk1,
+                nk2,
+                nk3,
+                round(nilai_akhir, 2),
+                nilai_ielts_est,
+                kategori_cefr,
+                sid,
+                user_agent,
+                ip,
+                st.session_state["last_tbi_result"]["uuid"]
+            ]
+            if ws:
+                ok, err = append_row_safe(ws, record)
+                if ok:
+                    st.success("Hasil tersimpan.")
+                else:
+                    st.error(f"Gagal menyimpan ke Google Sheets: {err}")
             else:
-                st.error(f"Gagal menyimpan ke Google Sheets: {err}")
-        else:
-            st.info("Tidak tersambung ke Google Sheets — hasil hanya diunduh PDF.")
+                st.info("Tidak tersambung ke Google Sheets — hasil hanya diunduh PDF.")
+
+    # end form
+
+    # Display persistent result (if any)
+    if "last_tbi_result" in st.session_state:
+        res = st.session_state["last_tbi_result"]
+        st.markdown("### Hasil Terakhir (TBI)")
+        st.write(f"Nama: **{res['nama']}**")
+        st.write(f"Listening (conv): {res['nk1']}, Structure (conv): {res['nk2']}, Reading (conv): {res['nk3']}")
+        st.write(f"Skor TOEFL-like: **{res['nilai_akhir']}**")
+        st.write(f"Perkiraan IELTS: **{res['nilai_ielts_est']}**")
+        st.write(f"Kategori CEFR: {res['kategori_cefr']}")
+        st.write(f"sid: {res['sid']} | ip: {res['ip']}")
+        st.write("---")
 
 # optional background
 def add_bg_from_url():
