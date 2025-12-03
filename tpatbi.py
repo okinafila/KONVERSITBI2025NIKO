@@ -28,10 +28,12 @@ except Exception:
 
 current_date = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
+
 class PDF(FPDF):
     def header(self):
         self.set_font('Arial', 'B', 16)
         self.cell(0, 10, 'Nilai Tes Anda', 0, 1, 'C')
+
 
 # -------------------------
 # Google Sheets helpers
@@ -74,12 +76,14 @@ def connect_gsheets_from_secrets():
     except Exception as e:
         return None, f"Gagal buka sheet: {e}"
 
+
 def append_row_safe(ws, row):
     try:
         ws.append_row(row, value_input_option="USER_ENTERED")
         return True, None
     except Exception as e:
         return False, str(e)
+
 
 # -------------------------
 # Metadata & conversion helpers
@@ -88,6 +92,7 @@ def get_session_id():
     if "sid" not in st.session_state:
         st.session_state.sid = str(uuid.uuid4())
     return st.session_state.sid
+
 
 def get_user_agent():
     """
@@ -101,6 +106,7 @@ def get_user_agent():
             return "unknown"
     return "unknown"
 
+
 def get_public_ip():
     """
     Attempt client-side fetch using st_javascript for most reliability on Streamlit Cloud.
@@ -109,7 +115,6 @@ def get_public_ip():
     # 1) try st_javascript client-side fetch (returns string ip)
     if SJ_AVAILABLE:
         try:
-            # This JS returns the IP string or null
             js_code = """
             (async ()=>{
               try {
@@ -137,6 +142,7 @@ def get_public_ip():
 
     return "unknown"
 
+
 def toefl_to_ielts(score):
     mapping = [
         (660, 9.0),
@@ -161,6 +167,7 @@ def toefl_to_ielts(score):
         if s >= minimum:
             return band
     return 0.0
+
 
 # -------------------------
 # UI & App
@@ -188,17 +195,17 @@ with st.sidebar:
                            default_index=1)
 
 # ---------- TPA (left untouched) ----------
-if (selected == 'Hitung Nilai TPA') :
-    st.title ('Hitung Nilai TPA')
+if (selected == 'Hitung Nilai TPA'):
+    st.title('Hitung Nilai TPA')
 
-    nama = st.text_input ("Nama")
-    nilai_verbal = st.text_input ("Masukkan Nilai Verbal", "0")
-    nilai_numerikal = st.text_input ("Masukkan Nilai Numerikal", "0")
-    nilai_figural = st.text_input ("Masukkan Nilai Figural", "0")
+    nama = st.text_input("Nama")
+    nilai_verbal = st.text_input("Masukkan Nilai Verbal", "0")
+    nilai_numerikal = st.text_input("Masukkan Nilai Numerikal", "0")
+    nilai_figural = st.text_input("Masukkan Nilai Figural", "0")
 
     Hitung = st.button('Hitung Nilai TPA')
 
-    if Hitung :
+    if Hitung:
         # validasi input
         try:
             nv = float(nilai_verbal)
@@ -209,8 +216,9 @@ if (selected == 'Hitung Nilai TPA') :
             st.stop()
 
         rata_rata = (nv + nn + nf) / 3
-        nilai_tpa = ((rata_rata / 100)*600)+200
-        st.markdown(f'<p style="font-size: 24px;">Nilai TPA Anda Adalah= {round(nilai_tpa, 2)}</p>', unsafe_allow_html=True)
+        nilai_tpa = ((rata_rata / 100) * 600) + 200
+        st.markdown(f'<p style="font-size: 24px;">Nilai TPA Anda Adalah= {round(nilai_tpa, 2)}</p>',
+                    unsafe_allow_html=True)
 
         # Simpan hasil dalam PDF
         pdf = PDF()
@@ -280,8 +288,8 @@ if (selected == 'Hitung Nilai TPA') :
             st.info("Tidak tersambung ke Google Sheets — hasil hanya diunduh PDF.")
 
 
-# ---------- TBI (UPDATED: persist output & better IP fetch) ----------
-if (selected == "Hitung Nilai TBI") :
+# ---------- TBI (UPDATED: persist output, hide sid/ip in UI, re-add PDF download) ----------
+if (selected == "Hitung Nilai TBI"):
     st.title('Hitung Nilai TBI')
 
     # Nilai & konversi arrays (unchanged)
@@ -321,10 +329,10 @@ if (selected == "Hitung Nilai TBI") :
         nearest_idx = min(range(len(keys)), key=lambda i: abs(keys[i] - val))
         return conv[nearest_idx]
 
-    nama = st.text_input ("Nama")
-    nilai_input = st.text_input ("Masukkan Nilai Listening", "0")
-    nilai_input1 = st.text_input ("Masukkan Nilai Structure", "0")
-    nilai_input2 = st.text_input ("Masukkan Nilai Reading", "0")
+    nama = st.text_input("Nama")
+    nilai_input = st.text_input("Masukkan Nilai Listening", "0")
+    nilai_input1 = st.text_input("Masukkan Nilai Structure", "0")
+    nilai_input2 = st.text_input("Masukkan Nilai Reading", "0")
 
     # We use a form to reduce rerun flicker — results persist in session_state
     with st.form(key="form_tbi"):
@@ -365,13 +373,57 @@ if (selected == "Hitung Nilai TBI") :
             else:
                 kategori_cefr = "Skor tidak termasuk dalam kategori yang diberikan"
 
-            # metadata
+            # metadata (still collected for sheet, but NOT shown in UI)
             sid = get_session_id()
             user_agent = get_user_agent()
             ip = get_public_ip()
             timestamp = datetime.datetime.utcnow().isoformat()
 
-            # save results into session_state so UI keeps it after rerun
+            # build PDF (so user can download). store bytes in session_state to persist
+            pdf = PDF()
+            pdf.add_page()
+            pdf.set_font("Courier", size=12)
+            try:
+                pdf.image("logopusbinjf.png", x=10, y=8, w=25)
+            except Exception:
+                pass
+            pdf.cell(200, 10, f" ", ln=True, align="C")
+            pdf.cell(50, 10, "Nama: ")
+            pdf.cell(50, 10, str(nama))
+            pdf.cell(200, 10, f" ", ln=True)
+            pdf.set_font("Courier", "B", 12)
+            pdf.cell(50, 10, "Subtest", 1, 0, "C")
+            pdf.cell(50, 10, "Nilai Konversi", 1, 0, "C")
+            pdf.ln()
+            pdf.set_font("Courier", size=12)
+            pdf.cell(50, 10, "Listening", 1)
+            pdf.cell(50, 10, str(nk1), 1, 0, "C")
+            pdf.ln()
+            pdf.cell(50, 10, "Structure", 1)
+            pdf.cell(50, 10, str(nk2), 1, 0, "C")
+            pdf.ln()
+            pdf.cell(50, 10, "Reading", 1)
+            pdf.cell(50, 10, str(nk3), 1, 0, "C")
+            pdf.ln()
+            pdf.cell(50, 10, "Skor TBI", 1)
+            pdf.cell(50, 10, f"{round(nilai_akhir, 2)}", 1, 0, "C")
+            pdf.ln()
+            pdf.cell(30, 10, "Kategori :", 0)
+            pdf.cell(150, 10, str(kategori_cefr), 0)
+            pdf.ln()
+            pdf.set_font("Courier", size=11)
+            pdf.cell(20, 5, "Note : hasil tes ini bersifat try out, tidak dapat digunakan untuk mengikuti", 0)
+            pdf.ln()
+            pdf.cell(20, 5, "       seleksi beasiswa apapun", 0)
+            pdf.ln()
+            pdf.set_font("Courier", size=12)
+            pdf.cell(200, 50, "Best Regards,", ln=True, align="C")
+            pdf.cell(200, 10, "Pusbin JFPM", ln=True, align="C")
+            pdf.set_y(0)
+            pdf.cell(0, 10, f"Dicetak: {current_date}", 0, 0, "R")
+            pdf_output = pdf.output(dest="S").encode("latin1")
+
+            # save persistent result + pdf bytes
             st.session_state["last_tbi_result"] = {
                 "timestamp": timestamp,
                 "nama": nama,
@@ -384,10 +436,11 @@ if (selected == "Hitung Nilai TBI") :
                 "sid": sid,
                 "user_agent": user_agent,
                 "ip": ip,
-                "uuid": str(uuid.uuid4())
+                "uuid": str(uuid.uuid4()),
+                "pdf_bytes": pdf_output
             }
 
-            # append to sheet (with metadata)
+            # append to sheet (with metadata) — sid/ip still recorded
             record = [
                 timestamp,
                 "TBI",
@@ -414,7 +467,7 @@ if (selected == "Hitung Nilai TBI") :
 
     # end form
 
-    # Display persistent result (if any)
+    # Display persistent result (if any) — hide sid and ip (but keep PDF download)
     if "last_tbi_result" in st.session_state:
         res = st.session_state["last_tbi_result"]
         st.markdown("### Hasil Terakhir (TBI)")
@@ -423,13 +476,22 @@ if (selected == "Hitung Nilai TBI") :
         st.write(f"Skor TOEFL-like: **{res['nilai_akhir']}**")
         st.write(f"Perkiraan IELTS: **{res['nilai_ielts_est']}**")
         st.write(f"Kategori CEFR: {res['kategori_cefr']}")
-        st.write(f"sid: {res['sid']} | ip: {res['ip']}")
+        # do NOT display sid/ip
         st.write("---")
+        # Provide download button if pdf bytes present
+        if res.get("pdf_bytes"):
+            st.download_button(
+                label="Download Hasil Perhitungan TBI (PDF)",
+                data=res["pdf_bytes"],
+                file_name="hasil_perhitungan_tbi.pdf",
+                mime="application/pdf"
+            )
+
 
 # optional background
 def add_bg_from_url():
     st.markdown(
-         f"""
+        f"""
          <style>
          .stApp {{
              background-image: url("https://cdn.pixabay.com/photo/2016/10/11/21/43/geometric-1732847_640.jpg");
@@ -438,7 +500,8 @@ def add_bg_from_url():
          }}
          </style>
          """,
-         unsafe_allow_html=True
-     )
+        unsafe_allow_html=True
+    )
+
 
 add_bg_from_url()
