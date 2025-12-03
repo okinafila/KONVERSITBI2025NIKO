@@ -13,6 +13,18 @@ try:
 except Exception:
     GS_AVAILABLE = False
 
+# optional imports for metadata
+try:
+    import requests
+except Exception:
+    requests = None
+
+try:
+    from streamlit_javascript import st_javascript
+    SJ_AVAILABLE = True
+except Exception:
+    SJ_AVAILABLE = False
+
 current_date = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 class PDF(FPDF):
@@ -28,7 +40,7 @@ def connect_gsheets_from_secrets():
     Connect to Google Sheets using st.secrets['gspread'].
     Supports either:
       - st.secrets['gspread']['service_account_json'] (string JSON), OR
-      - st.secrets['gspread']['service_account_b64'] (base64 of JSON)
+      - st.secrets['gpread']['service_account_b64'] (base64 of JSON)
     Expects st.secrets['gspread']['sheet_key'] set.
     Returns (ws, error) where ws is worksheet or None.
     """
@@ -37,16 +49,12 @@ def connect_gsheets_from_secrets():
     if "gspread" not in st.secrets:
         return None, "st.secrets['gspread'] tidak ditemukan"
 
-    # get JSON from either secrets key
     creds_json = None
-    # 1) try direct JSON
     if "service_account_json" in st.secrets["gspread"]:
         try:
             creds_json = json.loads(st.secrets["gspread"]["service_account_json"])
         except Exception as e:
             return None, f"Invalid service_account_json: {e}"
-
-    # 2) try base64
     elif "service_account_b64" in st.secrets["gspread"]:
         try:
             import base64
@@ -57,7 +65,6 @@ def connect_gsheets_from_secrets():
     else:
         return None, "Tidak menemukan service_account_json atau service_account_b64 di st.secrets"
 
-    # authorize
     try:
         scope = ["https://www.googleapis.com/auth/spreadsheets",
                  "https://www.googleapis.com/auth/drive"]
@@ -76,14 +83,60 @@ def connect_gsheets_from_secrets():
 
 def append_row_safe(ws, row):
     try:
-        # menggunakan USER_ENTERED supaya format angka/teks lebih natural
         ws.append_row(row, value_input_option="USER_ENTERED")
         return True, None
     except Exception as e:
         return False, str(e)
 
 # -------------------------
-# UI & App
+# Metadata & conversion helpers (minimal changes)
+# -------------------------
+def get_session_id():
+    if "sid" not in st.session_state:
+        st.session_state.sid = str(uuid.uuid4())
+    return st.session_state.sid
+
+def get_user_agent():
+    if SJ_AVAILABLE:
+        try:
+            ua = st_javascript("navigator.userAgent")
+            return ua if ua else "unknown"
+        except Exception:
+            return "unknown"
+    return "unknown"
+
+def get_public_ip():
+    if requests is None:
+        return "unknown"
+    try:
+        r = requests.get("https://api.ipify.org?format=json", timeout=3)
+        return r.json().get("ip", "unknown")
+    except Exception:
+        return "unknown"
+
+def toefl_to_ielts(score):
+    mapping = [
+        (660, 9.0),
+        (640, 8.5),
+        (620, 8.0),
+        (600, 7.5),
+        (580, 7.0),
+        (560, 6.5),
+        (540, 6.0),
+        (520, 5.5),
+        (500, 5.0),
+        (480, 4.5),
+        (460, 4.0),
+        (440, 3.5),
+        (310, 3.0),
+    ]
+    for minimum, band in mapping:
+        if score >= minimum:
+            return band
+    return 0.0
+
+# -------------------------
+# UI & App (kept original structure; only small inserts)
 # -------------------------
 st.set_page_config(page_title="Aplikasi Konversi Skor TBI", layout="centered")
 
@@ -179,15 +232,25 @@ if (selected == 'Hitung Nilai TPA') :
             mime="application/pdf"
         )
 
-        # --- Rekam ke Google Sheets (append)
+        # --- minimal: add IELTS conversion + metadata, then append
+        sid = get_session_id()
+        user_agent = get_user_agent()
+        ip = get_public_ip()
+        timestamp = datetime.datetime.utcnow().isoformat()
+        nilai_ielts_tpa = toefl_to_ielts(round(nilai_tpa))
+
         record = [
-            current_date,
+            timestamp,
             "TPA",
             nama,
             nv,
             nn,
             nf,
             round(nilai_tpa, 2),
+            nilai_ielts_tpa,
+            sid,
+            user_agent,
+            ip,
             str(uuid.uuid4())
         ]
         if ws:
@@ -248,10 +311,7 @@ if (selected == "Hitung Nilai TBI") :
         nilai_akhir = (nk1 + nk2 + nk3) / 3 * 10
         st.markdown(f'<p style="font-size: 24px;">Nilai TBI Anda Adalah= {round(nilai_akhir, 2)}</p>', unsafe_allow_html=True)
 
-    # --- konversi TOEFL -> IELTS (TBI) ---
-    nilai_ielts_est = toefl_to_ielts(round(nilai_akhir))
-    st.markdown(f'Perkiraan IELTS (dari hasil TBI): **{nilai_ielts_est}**')
-
+        # determine kategori (CEFR)
         def cefr_level_tbi(skor):
             if 627 <= skor <= 677:
                 return "C1 : Effective Operational Proficiency / Advanced (Proficient User)"
@@ -354,5 +414,3 @@ def add_bg_from_url():
      )
 
 add_bg_from_url()
-
-
