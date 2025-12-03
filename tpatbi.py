@@ -89,7 +89,7 @@ def append_row_safe(ws, row):
         return False, str(e)
 
 # -------------------------
-# Metadata & conversion helpers (minimal changes)
+# Minimal metadata helpers (unchanged)
 # -------------------------
 def get_session_id():
     if "sid" not in st.session_state:
@@ -114,7 +114,13 @@ def get_public_ip():
     except Exception:
         return "unknown"
 
+# -------------------------
+# TOEFL -> IELTS converter (0.5 bands)
+# -------------------------
 def toefl_to_ielts(score):
+    """
+    Convert TOEFL-like score (310-677) to IELTS band using 0.5 increments mapping.
+    """
     mapping = [
         (660, 9.0),
         (640, 8.5),
@@ -130,13 +136,17 @@ def toefl_to_ielts(score):
         (440, 3.5),
         (310, 3.0),
     ]
+    try:
+        s = float(score)
+    except:
+        return None
     for minimum, band in mapping:
-        if score >= minimum:
+        if s >= minimum:
             return band
     return 0.0
 
 # -------------------------
-# UI & App (kept original structure; only small inserts)
+# UI & App (TPA kept as before; TBI updated to include IELTS metadata)
 # -------------------------
 st.set_page_config(page_title="Aplikasi Konversi Skor TBI", layout="centered")
 
@@ -160,7 +170,7 @@ with st.sidebar:
                            ['Hitung Nilai TPA', 'Hitung Nilai TBI'],
                            default_index=1)
 
-# halaman hitung nilai TPA
+# ---------- TPA (left untouched) ----------
 if (selected == 'Hitung Nilai TPA') :
     st.title ('Hitung Nilai TPA')
 
@@ -232,25 +242,15 @@ if (selected == 'Hitung Nilai TPA') :
             mime="application/pdf"
         )
 
-        # --- minimal: add IELTS conversion + metadata, then append
-        sid = get_session_id()
-        user_agent = get_user_agent()
-        ip = get_public_ip()
-        timestamp = datetime.datetime.utcnow().isoformat()
-        nilai_ielts_tpa = toefl_to_ielts(round(nilai_tpa))
-
+        # --- TPA recording left as-is (no IELTS injection) ---
         record = [
-            timestamp,
+            current_date,
             "TPA",
             nama,
             nv,
             nn,
             nf,
             round(nilai_tpa, 2),
-            nilai_ielts_tpa,
-            sid,
-            user_agent,
-            ip,
             str(uuid.uuid4())
         ]
         if ws:
@@ -262,11 +262,12 @@ if (selected == 'Hitung Nilai TPA') :
         else:
             st.info("Tidak tersambung ke Google Sheets — hasil hanya diunduh PDF.")
 
-# halaman hitung nilai TBI
+
+# ---------- TBI (UPDATED: add IELTS conversion & metadata here) ----------
 if (selected == "Hitung Nilai TBI") :
     st.title('Hitung Nilai TBI')
 
-    # Nilai & konversi arrays
+    # Nilai & konversi arrays (unchanged)
     nilai_listening = [0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34, 36, 38, 40, 42, 44, 46, 48, 50, 52, 54, 56, 58, 60, 62, 64, 66, 68, 70, 72, 74, 76, 78, 80, 82, 84, 86, 88, 90, 92, 94, 96, 98, 100]
     konversi_listening = [31, 32, 32, 33, 34, 35, 35, 36, 37, 38, 38, 39, 40, 41, 41, 42, 43, 44, 44, 45, 46, 47, 47, 48, 49, 50, 50, 51, 52, 52, 53, 54, 55, 55, 56, 57, 58, 58, 59, 60, 61, 61, 62, 63, 64, 64, 65, 66, 67, 67, 68]
     nilai_structure = [0, 2.5, 5, 7.5, 10, 12.5, 15, 17.5, 20, 22.5, 25, 27.5, 30, 32.5, 35, 37.5, 40, 42.5, 45, 47.5, 50, 52.5, 55, 57.5, 60, 62.5, 65, 67.5, 70, 72.5, 75, 77.5, 80, 82.5, 85, 87.5, 90, 92.5, 95, 97.5, 100]
@@ -281,8 +282,27 @@ if (selected == "Hitung Nilai TBI") :
     }
 
     def konversi_nilai(variabel, nilai_asli):
-        # nilai_asli harus persis ada di dictionary (fungsi lama)
-        return konversi_dict[variabel][nilai_asli]
+        # tolerant nearest-neighbor lookup (keamanan input)
+        if variabel == "Listening":
+            keys = nilai_listening
+            conv = konversi_listening
+        elif variabel == "Structure":
+            keys = nilai_structure
+            conv = konversi_structure
+        elif variabel == "Reading":
+            keys = nilai_reading
+            conv = konversi_reading
+        else:
+            raise KeyError("Variabel konversi tidak dikenali")
+        try:
+            val = float(nilai_asli)
+        except:
+            raise KeyError("Nilai input bukan angka")
+        if val in keys:
+            return conv[keys.index(val)]
+        # nearest neighbor
+        nearest_idx = min(range(len(keys)), key=lambda i: abs(keys[i] - val))
+        return conv[nearest_idx]
 
     nama = st.text_input ("Nama")
     nilai_input = st.text_input ("Masukkan Nilai Listening", "0")
@@ -310,6 +330,10 @@ if (selected == "Hitung Nilai TBI") :
 
         nilai_akhir = (nk1 + nk2 + nk3) / 3 * 10
         st.markdown(f'<p style="font-size: 24px;">Nilai TBI Anda Adalah= {round(nilai_akhir, 2)}</p>', unsafe_allow_html=True)
+
+        # --- NEW: convert TOEFL-like result -> IELTS, show it, and record metadata ---
+        nilai_ielts_est = toefl_to_ielts(round(nilai_akhir))
+        st.markdown(f'Perkiraan IELTS (dari hasil TBI): **{nilai_ielts_est}**')
 
         # determine kategori (CEFR)
         def cefr_level_tbi(skor):
@@ -377,16 +401,25 @@ if (selected == "Hitung Nilai TBI") :
             mime="application/pdf"
         )
 
-        # Rekam ke Google Sheets
+        # Rekam ke Google Sheets (TBI) -- now includes IELTS and metadata
+        sid = get_session_id()
+        user_agent = get_user_agent()
+        ip = get_public_ip()
+        timestamp = datetime.datetime.utcnow().isoformat()
+
         record = [
-            current_date,
+            timestamp,
             "TBI",
             nama,
             nk1,
             nk2,
             nk3,
             round(nilai_akhir, 2),
+            nilai_ielts_est,   # <-- new: IELTS estimate based on TOEFL-like score
             kategori_cefr,
+            sid,
+            user_agent,
+            ip,
             str(uuid.uuid4())
         ]
         if ws:
