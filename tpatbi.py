@@ -13,19 +13,6 @@ try:
 except Exception:
     GS_AVAILABLE = False
 
-# --- tambahan imports untuk logging / user metadata ---
-try:
-    import requests
-except Exception:
-    requests = None
-
-# st_javascript optional (ambil navigator.userAgent)
-try:
-    from streamlit_javascript import st_javascript
-    SJ_AVAILABLE = True
-except Exception:
-    SJ_AVAILABLE = False
-
 current_date = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 class PDF(FPDF):
@@ -41,7 +28,7 @@ def connect_gsheets_from_secrets():
     Connect to Google Sheets using st.secrets['gspread'].
     Supports either:
       - st.secrets['gspread']['service_account_json'] (string JSON), OR
-      - st.secrets['gpread']['service_account_b64'] (base64 of JSON)
+      - st.secrets['gspread']['service_account_b64'] (base64 of JSON)
     Expects st.secrets['gspread']['sheet_key'] set.
     Returns (ws, error) where ws is worksheet or None.
     """
@@ -94,64 +81,6 @@ def append_row_safe(ws, row):
         return True, None
     except Exception as e:
         return False, str(e)
-
-# -------------------------
-# Helper: session, ua, ip, conversion
-# -------------------------
-def get_session_id():
-    if "sid" not in st.session_state:
-        st.session_state.sid = str(uuid.uuid4())
-    return st.session_state.sid
-
-def get_user_agent():
-    """
-    Try to get user-agent via streamlit_javascript (client-side JS).
-    If not available or fails, return 'unknown'.
-    Note: st_javascript may return None on first run; calling on button press gives better chance.
-    """
-    if SJ_AVAILABLE:
-        try:
-            ua = st_javascript("navigator.userAgent")
-            return ua if ua else "unknown"
-        except Exception:
-            return "unknown"
-    return "unknown"
-
-def get_public_ip():
-    """
-    Get public IP via api.ipify.org (simple). If requests not available or fails, return 'unknown'.
-    """
-    if requests is None:
-        return "unknown"
-    try:
-        r = requests.get("https://api.ipify.org?format=json", timeout=3)
-        return r.json().get("ip", "unknown")
-    except Exception:
-        return "unknown"
-
-def toefl_to_ielts(score):
-    """
-    Convert TOEFL ITP-like score (310-677) to IELTS band using 0.5 increments mapping.
-    """
-    mapping = [
-        (660, 9.0),
-        (640, 8.5),
-        (620, 8.0),
-        (600, 7.5),
-        (580, 7.0),
-        (560, 6.5),
-        (540, 6.0),
-        (520, 5.5),
-        (500, 5.0),
-        (480, 4.5),
-        (460, 4.0),
-        (440, 3.5),
-        (310, 3.0),
-    ]
-    for minimum, band in mapping:
-        if score >= minimum:
-            return band
-    return 0.0
 
 # -------------------------
 # UI & App
@@ -251,25 +180,14 @@ if (selected == 'Hitung Nilai TPA') :
         )
 
         # --- Rekam ke Google Sheets (append)
-        # collect metadata
-        sid = get_session_id()
-        user_agent = get_user_agent()
-        ip = get_public_ip()
-        timestamp = datetime.datetime.utcnow().isoformat()
-        nilai_ielts_tpa = toefl_to_ielts(round(nilai_tpa))
-
         record = [
-            timestamp,
+            current_date,
             "TPA",
             nama,
             nv,
             nn,
             nf,
             round(nilai_tpa, 2),
-            nilai_ielts_tpa,
-            sid,
-            user_agent,
-            ip,
             str(uuid.uuid4())
         ]
         if ws:
@@ -396,26 +314,15 @@ if (selected == "Hitung Nilai TBI") :
         )
 
         # Rekam ke Google Sheets
-        # collect metadata
-        sid = get_session_id()
-        user_agent = get_user_agent()
-        ip = get_public_ip()
-        timestamp = datetime.datetime.utcnow().isoformat()
-        nilai_ielts_est = toefl_to_ielts(round(nilai_akhir))
-
         record = [
-            timestamp,
+            current_date,
             "TBI",
             nama,
             nk1,
             nk2,
             nk3,
             round(nilai_akhir, 2),
-            nilai_ielts_est,
             kategori_cefr,
-            sid,
-            user_agent,
-            ip,
             str(uuid.uuid4())
         ]
         if ws:
