@@ -247,9 +247,10 @@ if (selected == "Hitung Nilai TBI") :
 
         nilai_akhir = (nk1 + nk2 + nk3) / 3 * 10
         st.markdown(f'<p style="font-size: 24px;">Nilai TBI Anda Adalah= {round(nilai_akhir, 2)}</p>', unsafe_allow_html=True)
-# --- konversi TOEFL -> IELTS (TBI) ---
-nilai_ielts_est = toefl_to_ielts(round(nilai_akhir))
-st.markdown(f'Perkiraan IELTS (dari hasil TBI): **{nilai_ielts_est}**')
+
+    # --- konversi TOEFL -> IELTS (TBI) ---
+    nilai_ielts_est = toefl_to_ielts(round(nilai_akhir))
+    st.markdown(f'Perkiraan IELTS (dari hasil TBI): **{nilai_ielts_est}**')
 
         def cefr_level_tbi(skor):
             if 627 <= skor <= 677:
@@ -353,4 +354,5 @@ def add_bg_from_url():
      )
 
 add_bg_from_url()
+
 
