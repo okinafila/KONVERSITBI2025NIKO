@@ -85,7 +85,7 @@ def append_row_safe(ws, row):
 # -------------------------
 # UI & App
 # -------------------------
-st.set_page_config(page_title="Aplikasi Konversi SKor TBI", layout="centered")
+st.set_page_config(page_title="Aplikasi Konversi Skor TBI", layout="centered")
 
 # Sidebar: attempt connect once and show status
 with st.sidebar:
@@ -350,6 +350,7 @@ def add_bg_from_url():
      )
 
 add_bg_from_url()
+
 
 
 
