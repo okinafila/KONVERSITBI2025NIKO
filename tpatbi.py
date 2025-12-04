@@ -472,7 +472,7 @@ if (selected == "Hitung Nilai TBI"):
         res = st.session_state["last_tbi_result"]
         st.markdown("### Hasil Terakhir (TBI)")
         st.write(f"Nama: **{res['nama']}**")
-        st.write(f"Skor TOEFL-like: **{res['nilai_akhir']}**")
+        st.write(f"Perkiraan TOEFL: **{res['nilai_akhir']}**")
         st.write(f"Perkiraan IELTS: **{res['nilai_ielts_est']}**")
         st.write(f"Kategori CEFR: {res['kategori_cefr']}")
         st.write("---")
@@ -503,6 +503,7 @@ def add_bg_from_url():
 
 
 add_bg_from_url()
+
 
 
 
