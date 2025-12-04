@@ -288,7 +288,7 @@ if (selected == 'Hitung Nilai TPA'):
             st.info("Tidak tersambung ke Google Sheets — hasil hanya diunduh PDF.")
 
 
-# ---------- TBI (UPDATED: persist output, hide sid/ip in UI, re-add PDF download) ----------
+# ---------- TBI (UPDATED: show only name, toefl score, ielts; include ielts in PDF) ----------
 if (selected == "Hitung Nilai TBI"):
     st.title('Hitung Nilai TBI')
 
@@ -379,7 +379,7 @@ if (selected == "Hitung Nilai TBI"):
             ip = get_public_ip()
             timestamp = datetime.datetime.utcnow().isoformat()
 
-            # build PDF (so user can download). store bytes in session_state to persist
+            # build PDF (so user can download). include IELTS estimate in PDF.
             pdf = PDF()
             pdf.add_page()
             pdf.set_font("Courier", size=12)
@@ -390,26 +390,12 @@ if (selected == "Hitung Nilai TBI"):
             pdf.cell(200, 10, f" ", ln=True, align="C")
             pdf.cell(50, 10, "Nama: ")
             pdf.cell(50, 10, str(nama))
-            pdf.cell(200, 10, f" ", ln=True)
-            pdf.set_font("Courier", "B", 12)
-            pdf.cell(50, 10, "Subtest", 1, 0, "C")
-            pdf.cell(50, 10, "Nilai Konversi", 1, 0, "C")
             pdf.ln()
-            pdf.set_font("Courier", size=12)
-            pdf.cell(50, 10, "Listening", 1)
-            pdf.cell(50, 10, str(nk1), 1, 0, "C")
+            pdf.cell(50, 10, "Skor TOEFL-like: ")
+            pdf.cell(50, 10, f"{round(nilai_akhir, 2)}")
             pdf.ln()
-            pdf.cell(50, 10, "Structure", 1)
-            pdf.cell(50, 10, str(nk2), 1, 0, "C")
-            pdf.ln()
-            pdf.cell(50, 10, "Reading", 1)
-            pdf.cell(50, 10, str(nk3), 1, 0, "C")
-            pdf.ln()
-            pdf.cell(50, 10, "Skor TBI", 1)
-            pdf.cell(50, 10, f"{round(nilai_akhir, 2)}", 1, 0, "C")
-            pdf.ln()
-            pdf.cell(30, 10, "Kategori :", 0)
-            pdf.cell(150, 10, str(kategori_cefr), 0)
+            pdf.cell(50, 10, "Perkiraan IELTS: ")
+            pdf.cell(50, 10, str(nilai_ielts_est))
             pdf.ln()
             pdf.set_font("Courier", size=11)
             pdf.cell(20, 5, "Note : hasil tes ini bersifat try out, tidak dapat digunakan untuk mengikuti", 0)
@@ -427,9 +413,6 @@ if (selected == "Hitung Nilai TBI"):
             st.session_state["last_tbi_result"] = {
                 "timestamp": timestamp,
                 "nama": nama,
-                "nk1": nk1,
-                "nk2": nk2,
-                "nk3": nk3,
                 "nilai_akhir": round(nilai_akhir, 2),
                 "nilai_ielts_est": nilai_ielts_est,
                 "kategori_cefr": kategori_cefr,
@@ -445,9 +428,6 @@ if (selected == "Hitung Nilai TBI"):
                 timestamp,
                 "TBI",
                 nama,
-                nk1,
-                nk2,
-                nk3,
                 round(nilai_akhir, 2),
                 nilai_ielts_est,
                 kategori_cefr,
@@ -467,16 +447,14 @@ if (selected == "Hitung Nilai TBI"):
 
     # end form
 
-    # Display persistent result (if any) — hide sid and ip (but keep PDF download)
+    # Display persistent result (if any) — show only name, toefl score, ielts; hide sid/ip
     if "last_tbi_result" in st.session_state:
         res = st.session_state["last_tbi_result"]
         st.markdown("### Hasil Terakhir (TBI)")
         st.write(f"Nama: **{res['nama']}**")
-        st.write(f"Listening (conv): {res['nk1']}, Structure (conv): {res['nk2']}, Reading (conv): {res['nk3']}")
         st.write(f"Skor TOEFL-like: **{res['nilai_akhir']}**")
         st.write(f"Perkiraan IELTS: **{res['nilai_ielts_est']}**")
         st.write(f"Kategori CEFR: {res['kategori_cefr']}")
-        # do NOT display sid/ip
         st.write("---")
         # Provide download button if pdf bytes present
         if res.get("pdf_bytes"):
