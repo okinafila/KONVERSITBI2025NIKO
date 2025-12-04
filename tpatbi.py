@@ -445,6 +445,9 @@ if (selected == "Hitung Nilai TBI"):
                 timestamp,
                 "TBI",
                 nama,
+                nk1,
+                nk2,
+                nk3,
                 round(nilai_akhir, 2),
                 nilai_ielts_est,
                 kategori_cefr,
@@ -458,9 +461,9 @@ if (selected == "Hitung Nilai TBI"):
                 if ok:
                     st.success("Hasil konversi.")
                 else:
-                    st.error(f"Gagal menyimpan ke Google Sheets: {err}")
+                    st.error(f"Gagal : {err}")
             else:
-                st.info("Tidak tersambung ke Google Sheets — hasil hanya diunduh PDF.")
+                st.info("Tidak tersambung — hasil hanya diunduh PDF.")
 
     # end form
 
@@ -500,5 +503,6 @@ def add_bg_from_url():
 
 
 add_bg_from_url()
+
 
 
