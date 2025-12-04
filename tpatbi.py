@@ -281,11 +281,11 @@ if (selected == 'Hitung Nilai TPA'):
         if ws:
             ok, err = append_row_safe(ws, record)
             if ok:
-                st.success("Hasil tersimpan.")
+                st.success("Hasil konversi.")
             else:
-                st.error(f"Gagal menyimpan ke Google Sheets: {err}")
+                st.error(f"Gagal : {err}")
         else:
-            st.info("Tidak tersambung ke Google Sheets — hasil hanya diunduh PDF.")
+            st.info("Tidak tersambung, hasil hanya diunduh PDF.")
 
 
 # ---------- TBI (UPDATED: show only name, toefl score, ielts; include ielts in PDF) ----------
@@ -405,7 +405,7 @@ if (selected == "Hitung Nilai TBI"):
             pdf.cell(50, 10, "Reading", 1)
             pdf.cell(50, 10, str(nk3), 1, 0, "C")
             pdf.ln()
-            pdf.cell(50, 10, "Skor TBI (Perkiraan TOEFL)", 1)
+            pdf.cell(50, 10, "Skor TBI (TOEFL)", 1)
             pdf.cell(50, 10, f"{round(nilai_akhir, 2)}", 1, 0, "C")
             pdf.ln()
             pdf.cell(50, 10, "Perkiraan IELTS: ")
@@ -456,7 +456,7 @@ if (selected == "Hitung Nilai TBI"):
             if ws:
                 ok, err = append_row_safe(ws, record)
                 if ok:
-                    st.success("Hasil tersimpan.")
+                    st.success("Hasil konversi.")
                 else:
                     st.error(f"Gagal menyimpan ke Google Sheets: {err}")
             else:
@@ -500,4 +500,5 @@ def add_bg_from_url():
 
 
 add_bg_from_url()
+
 
